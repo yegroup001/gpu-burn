@@ -25,9 +25,10 @@ override LDFLAGS  += -Wl,-rpath=${CUDAPATH}/lib64
 override LDFLAGS  += -Wl,-rpath=${CUDAPATH}/lib
 override LDFLAGS  += -lcublas
 override LDFLAGS  += -lcudart
+override LDFLAGS  += -lcublasLt
 
-COMPUTE      ?= 75
-CUDA_VERSION ?= 11.8.0
+COMPUTE      ?= 121
+CUDA_VERSION ?= 13.0.0
 IMAGE_DISTRO ?= ubi8
 
 override NVCCFLAGS ?=

@@ -59,3 +59,66 @@ extern "C" __global__ void compareD(double *C, int *faultyElems, size_t iters) {
 
 	atomicAdd(faultyElems, myFaulty);
 }
+
+// Half precision (fp16) - compare raw 16-bit values
+extern "C" __global__ void compareH(unsigned short *C, int *faultyElems, size_t iters) {
+	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
+		gridDim.x*blockDim.x + // W
+		blockIdx.x*blockDim.x + threadIdx.x; // X
+
+	int myFaulty = 0;
+	for (size_t i = 1; i < iters; ++i)
+		if (C[myIndex] != C[myIndex + i*iterStep])
+			myFaulty++;
+
+	atomicAdd(faultyElems, myFaulty);
+}
+
+#if defined(__CUDA_ARCH__) || defined(__CUDACC__)
+// Bfloat16 - compare raw 16-bit values
+extern "C" __global__ void compareBF16(unsigned short *C, int *faultyElems, size_t iters) {
+	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
+		gridDim.x*blockDim.x + // W
+		blockIdx.x*blockDim.x + threadIdx.x; // X
+
+	int myFaulty = 0;
+	for (size_t i = 1; i < iters; ++i)
+		if (C[myIndex] != C[myIndex + i*iterStep])
+			myFaulty++;
+
+	atomicAdd(faultyElems, myFaulty);
+}
+
+// FP8 (E4M3) - compare raw 8-bit values
+extern "C" __global__ void compareFP8(unsigned char *C, int *faultyElems, size_t iters) {
+	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
+		gridDim.x*blockDim.x + // W
+		blockIdx.x*blockDim.x + threadIdx.x; // X
+
+	int myFaulty = 0;
+	for (size_t i = 1; i < iters; ++i)
+		if (C[myIndex] != C[myIndex + i*iterStep])
+			myFaulty++;
+
+	atomicAdd(faultyElems, myFaulty);
+}
+
+// FP4 (E2M1) - compare raw packed 4-bit values (stored as bytes)
+extern "C" __global__ void compareFP4_E2M1(unsigned char *C, int *faultyElems, size_t iters) {
+	size_t iterStep = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
+	size_t myIndex = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
+		gridDim.x*blockDim.x + // W
+		blockIdx.x*blockDim.x + threadIdx.x; // X
+
+	int myFaulty = 0;
+	for (size_t i = 1; i < iters; ++i)
+		if (C[myIndex] != C[myIndex + i*iterStep])
+			myFaulty++;
+
+	atomicAdd(faultyElems, myFaulty);
+}
+#endif
+
