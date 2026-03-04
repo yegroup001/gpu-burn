@@ -129,8 +129,29 @@ struct BurnProgressPacket {
 template <class T> class GPU_Test {
   public:
     GPU_Test(int dev, bool tensors, const char *kernelFile)
-    : d_devNumber(dev), d_tensors(tensors), d_kernelFile(kernelFile) {
-    d_useLt = false;
+    : d_tensors(tensors),
+      d_devNumber(dev),
+      d_kernelFile(kernelFile),
+      d_typeName(nullptr),
+      d_compareKernelName(nullptr),
+      d_dataType(CUDA_R_32F),
+      d_computeType(CUBLAS_COMPUTE_32F),
+      d_useLt(false),
+      d_AbytesPerIter(0),
+      d_BbytesPerIter(0),
+      d_CbytesPerIter(0),
+      d_iters(0),
+      d_error(0),
+      d_dev(0),
+      d_ctx(nullptr),
+      d_module(nullptr),
+      d_function(nullptr),
+      d_Cdata(0),
+      d_Adata(0),
+      d_Bdata(0),
+      d_faultyElemData(0),
+      d_faultyElemsHost(nullptr),
+      d_cublas(nullptr) {
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 12000
     d_isFp4 = false;
     d_ltHandle = nullptr;
@@ -221,13 +242,22 @@ template <class T> class GPU_Test {
     }
     ~GPU_Test() {
         bind();
-        checkError(cuMemFree(d_Cdata), "Free A");
-        checkError(cuMemFree(d_Adata), "Free B");
-        checkError(cuMemFree(d_Bdata), "Free C");
-        cuMemFreeHost(d_faultyElemsHost);
+        if (d_Cdata)
+            checkError(cuMemFree(d_Cdata), "Free C");
+        if (d_Adata)
+            checkError(cuMemFree(d_Adata), "Free A");
+        if (d_Bdata)
+            checkError(cuMemFree(d_Bdata), "Free B");
+        if (d_faultyElemData)
+            checkError(cuMemFree(d_faultyElemData), "Free faulty data");
+        if (d_faultyElemsHost)
+            cuMemFreeHost(d_faultyElemsHost);
+        if (d_module)
+            checkError(cuModuleUnload(d_module), "Unload module");
         printf("Freed memory for dev %d\n", d_devNumber);
 
-        cublasDestroy(d_cublas);
+        if (d_cublas)
+            cublasDestroy(d_cublas);
         printf("Uninitted cublas\n");
 
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 12000
@@ -248,6 +278,9 @@ template <class T> class GPU_Test {
         if (d_BscaleData)
             cuMemFree(d_BscaleData);
 #endif
+
+        if (d_ctx)
+            checkError(cuCtxDestroy(d_ctx), "Destroy CTX");
     }
 
     static void termHandler(int signum) { g_running = false; }
