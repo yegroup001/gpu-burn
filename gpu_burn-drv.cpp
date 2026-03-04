@@ -633,11 +633,46 @@ template <class T> class GPU_Test {
                 throw std::runtime_error("No suitable cuBLASLt FP4 matmul algorithm found");
             }
         } else {
-            checkError(cublasLtMatmulAlgoGetHeuristic(
-                           d_ltHandle, d_ltMatmulDesc,
-                           d_Adesc, d_Bdesc, d_Cdesc, d_Cdesc,
-                           pref, 1, &heuristic, &returnedResults),
-                       "ltGetHeuristic");
+            // FP8 on Ada/Hopper class GPUs is commonly exposed as A^T * B.
+            // Try T,N first and keep N,N as a fallback for wider compatibility.
+            struct Fp8HeuristicConfig {
+                cublasOperation_t transA;
+                const char *name;
+            };
+            std::vector<Fp8HeuristicConfig> fp8Configs;
+            fp8Configs.push_back({CUBLAS_OP_T, "T,N"});
+            fp8Configs.push_back({CUBLAS_OP_N, "N,N"});
+
+            cublasStatus_t lastStatus = CUBLAS_STATUS_NOT_SUPPORTED;
+            bool found = false;
+            for (size_t i = 0; i < fp8Configs.size(); ++i) {
+                const auto &cfg = fp8Configs[i];
+                checkError(cublasLtMatmulDescSetAttribute(d_ltMatmulDesc,
+                                                          CUBLASLT_MATMUL_DESC_TRANSA,
+                                                          &cfg.transA, sizeof(cfg.transA)),
+                           "ltSetTransA");
+                checkError(cublasLtMatmulDescSetAttribute(d_ltMatmulDesc,
+                                                          CUBLASLT_MATMUL_DESC_TRANSB,
+                                                          &opN, sizeof(opN)),
+                           "ltSetTransB");
+
+                returnedResults = 0;
+                lastStatus = cublasLtMatmulAlgoGetHeuristic(
+                    d_ltHandle, d_ltMatmulDesc,
+                    d_Adesc, d_Bdesc, d_Cdesc, d_Cdesc,
+                    pref, 1, &heuristic, &returnedResults);
+                if (lastStatus == CUBLAS_STATUS_SUCCESS && returnedResults > 0) {
+                    fprintf(stderr, "FP8 heuristic selected config: %s\n", cfg.name);
+                    found = true;
+                    break;
+                }
+                fprintf(stderr, "FP8 heuristic rejected config %s (status=%d, results=%d)\n",
+                        cfg.name, (int)lastStatus, returnedResults);
+            }
+            if (!found) {
+                checkError(lastStatus, "ltGetHeuristic");
+                throw std::runtime_error("No suitable cuBLASLt FP8 matmul algorithm found");
+            }
         }
         cublasLtMatmulPreferenceDestroy(pref);
 
